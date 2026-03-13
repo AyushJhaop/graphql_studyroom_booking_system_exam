@@ -113,3 +113,44 @@ Here is exactly what every file in `study_room_booking/` does.
 
 **Q5: What is the main difference between a Query and a Mutation in GraphQL?**
 > "A `Query` strictly acts as a `GET` request to fetch and read data without altering it. A `Mutation`, on the other hand, acts like `POST`, `PUT`, or `DELETE`, and is specifically designed to create or modify data in the database (like booking a room or adding a review). They use separate resolver methodologies."
+
+---
+
+## 6. Live Demo Queries for the Examiner
+
+During the viva, show the examiner that your application actually works by demonstrating these queries live at `http://127.0.0.1:5000/graphql`.
+
+### 1. Show How to Read Data (Query)
+**Goal:** Prove that you can filter rooms by capacity and only request specific fields (preventing over-fetching).
+```graphql
+query {
+  rooms(capacityGreaterThan: 3) {
+    roomNumber
+    capacity
+    location
+  }
+}
+```
+
+### 2. Show How to Write Data (Mutation)
+**Goal:** Book a room for a student.
+```graphql
+mutation {
+  bookRoom(input: {
+    studentId: 1
+    roomId: 3
+    startTime: "2024-11-20T14:00:00"
+    endTime: "2024-11-20T16:00:00"
+  }) {
+    id
+    status
+    startTime
+    endTime
+  }
+}
+```
+
+### 3. Show the Business Logic in Action (Double Booking Error)
+**Goal:** Prove that your time-conflict check works. 
+**Action:** Click the "Play" button on the exact same mutation above for a second time. 
+**Result:** The examiner will see the GraphQL API explicitly reject the booking and throw the Python Exception: *"Time conflict: The room is already booked for the selected time."*
