@@ -15,27 +15,22 @@ from datetime import datetime
 class Student(SQLAlchemyObjectType):
     class Meta:
         model = StudentModel
-        interfaces = (graphene.relay.Node, )
 
 class Room(SQLAlchemyObjectType):
     class Meta:
         model = RoomModel
-        interfaces = (graphene.relay.Node, )
 
 class Booking(SQLAlchemyObjectType):
     class Meta:
         model = BookingModel
-        interfaces = (graphene.relay.Node, )
 
 class Facility(SQLAlchemyObjectType):
     class Meta:
         model = FacilityModel
-        interfaces = (graphene.relay.Node, )
 
 class Review(SQLAlchemyObjectType):
     class Meta:
         model = ReviewModel
-        interfaces = (graphene.relay.Node, )
 
 
 # ==========================================
