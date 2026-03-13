@@ -1,102 +1,115 @@
-# 🎓 Study Room Booking System - Viva Exam Preparation Guide
+# 🎓 Study Room Booking System - Complete Viva Exam Guide
 
-This document is your complete study guide to explain all parts of the project during your viva exam. It is structured exactly how you should think about and explain the project conceptually.
-
----
-
-## 1. Project Overview
-**What is this project?**
-It is a Backend API for a Study Room Booking System. Using this API, students can:
-* See available study rooms and their facilities.
-* Filter rooms based on how many people they can fit (capacity).
-* Book a room for a specific time slot while avoiding time conflicts.
-* Cancel a booking.
-* Submit a review for the room after their booking is complete.
+This document is your definitive study guide for explaining your project comprehensively during your viva exam. It covers the problem statement, technology choices, the exact code architecture, data flow, and potential exam questions.
 
 ---
 
-## 2. Core Technologies Used (And WHY)
+## 1. Problem Statement: Why Build This?
 
-Examiners love asking *why* you chose a specific technology. Here is your answer:
+### **The Problem**
+In many educational institutions, booking study rooms is heavily manual, involving paper logbooks or scattered spreadsheets. This causes massive inefficiencies:
+* **Double Booking:** Two different groups reserve the exact same room at the same time.
+* **Information Scarcity:** Students don't know the exact capacity of the room or if it has necessary facilities (like a Projector or Smart TV) before they arrive.
+* **Over-fetching of Data (API Issue):** Traditional REST APIs are inefficient for this. If a mobile app needs a room's location and its facilities, a REST API usually forces the app to download *everything* (making 2 or 3 separate HTTP requests) causing slow load times and wasted bandwidth.
 
-* **Python & Flask:** Flask is a lightweight web framework. Rather than bringing in a heavy framework like Django, Flask is perfect for building a simple, fast API.
-* **SQLite:** It is a file-based, serverless database. It is incredibly fast to set up, requires no background database server to run, and keeps the whole project portable and easy to test.
-* **SQLAlchemy (ORM):** An Object-Relational Mapper. Instead of writing raw SQL commands (like `SELECT * FROM students`), SQLAlchemy lets us write Python classes to represent our database tables. This makes our code much safer against SQL Injection attacks.
-* **GraphQL (via Graphene):** Instead of making a traditional REST API (with multiple endpoints like `/rooms` and `/bookings`), we used GraphQL.
-  * **Why GraphQL?** It solves the issue of *over-fetching* and *under-fetching* data. The frontend application can hit a **single endpoint** (`/graphql`) and request exactly the exact fields it needs.
-
----
-
-## 3. Database Architecture (The Logic inside `models.py`)
-
-Our relational database consists of 5 tables. Think of them logically:
-
-1. **Student (`Student`):** Holds user information (Name, Email).
-2. **Room (`Room`):** Holds physical room properties (Room Number, Capacity, Location).
-3. **Facility (`Facility`):** Holds items available in a room (Projector, Smart TV). 
-   * *Relational Logic:* A Room can have *many* Facilities (One-to-Many).
-4. **Booking (`Booking`):** This is the bridge. It links a Student (Foreign Key) to a Room (Foreign Key), and stores a `start_time`, `end_time`, and a `status` (like 'booked' or 'cancelled').
-5. **Review (`Review`):** Links a rating and comment to a specific past Booking.
+### **The Solution**
+We developed a centralized, automated **Study Room Booking Backend System** that features:
+* A concrete business-logic algorithm that strictly prevents time-conflicts and double-bookings.
+* Relational database design allowing users to instantly filter rooms by capacity and view available facilities.
+* A **GraphQL API**, solving the REST over-fetching issue by allowing the client side to request *exactly* what data they need in one single request.
 
 ---
 
-## 4. GraphQL Concepts (The Logic inside `schema.py`)
+## 2. Technology Choices & Best Practices
 
-In GraphQL, there are exactly two main operations we need to understand: Queries and Mutations.
+### **Why Python & Flask? (Instead of Django/FastAPI)**
+* **Simplicity & Control:** Flask is a micro-framework. It is exceptionally lightweight and does not enforce a rigid structure. For a project focused wholly on demonstrating GraphQL routing and Database Architecture, Flask gets straight to the point without bringing in unneeded background complexity.
 
-### A. Queries (Reading Data)
-Queries are used like `GET` requests in REST. They only *read* information from the database. 
-* *Example:* `rooms(capacityGreaterThan: 4)`.
-* *Logic (`resolve_rooms` function):* The resolver function catches the query. It looks at the database, applies an `if` logic filter (e.g., `Room.capacity > 4`), retrieves the matching rows from SQLite, and hands them back to the user.
-
-### B. Mutations (Modifying Data)
-Mutations are used like `POST`, `PUT`, or `DELETE` requests in REST. They create, update, or remove data.
-* *Example:* `bookRoom`, `cancelBooking`, `addReview`.
+### **Why GraphQL Instead of REST APIs?**
+This is a critical distinction your examiner will care about. Let's compare them:
+* **The REST Issue:** In a REST API, you hit multiple endpoints (`/rooms` and then `/facilities/1`). If your frontend only needed the `roomNumber`, REST forces your server to return *all* data (location, capacity, created_at, etc.). This is called **Over-fetching**. If you need data from a different table, you have to hit a *second* endpoint, which is **Under-fetching**.
+* **The GraphQL Solution:** GraphQL has only **ONE** single endpoint (`/graphql`). The frontend sends a JSON-like Query dictating exactly what it wants (e.g., "Give me the room number and facilities of Room 1"). The server responds with *exactly* that data, nothing more. It saves multiple trips to the server and massive amounts of bandwidth.
 
 ---
 
-## 5. Core Business Logic Explained 
+## 3. The Architecture & Request Flow Explained
 
-The main brain of the app is inside the `bookRoom` mutation in `schema.py`. 
+During the viva, explain how a request moves from the user's browser down to the database using this flowchart:
 
-### How do we prevent time conflicts (Double Booking)?
-When a student tries to book a room, the system does **not** blindly save it. It performs a specific algorithm checking for overlaps:
+```text
+Client (Web Browser / GraphiQL)
+   ↓
+Query / Mutation (The JSON Request)
+   ↓
+GraphQL Server (Flask App)
+   ↓
+Schema (Validates the shape of the data)
+   ↓
+Resolver (The Python Logic)
+   ↓
+Database / ORM (SQLAlchemy -> SQLite)
+   ↓
+Response (Formatted JSON Data back to Client)
+```
 
-1. The API receives a new proposed `start_time` and `end_time` alongside a `roomId`.
-2. It asks the database: *"Are there any active bookings for this room where the existing start time is BEFORE the newly requested end time, AND the existing end time is AFTER the newly requested start time?"*
-3. **Code snippet of the algorithm:**
-   ```python
-   conflicts = db_session.query(BookingModel).filter(
-       BookingModel.room_id == input.roomId,
-       BookingModel.status == 'booked',
-       BookingModel.start_time < new_end,
-       BookingModel.end_time > new_start
-   ).count()
-   ```
-4. If `conflicts > 0` (meaning there's an overlap), the system throws a Python `Exception` rejecting the booking. If `conflicts == 0`, it saves the data successfully.
-
----
-
-## 6. The Request Flow (From Browser to Database)
-
-If the examiner asks: *"Walk me through exactly what happens when I click 'Book Room' on the frontend"*, this is the answer:
-
-1. **The Request:** The user submits a GraphQL Mutation from GraphiQL in their browser.
-2. **The Server (`app.py`):** The Flask server receives the request at the `/graphql` route.
-3. **The Schema (`schema.py`):** The server routes the payload to Graphene. Graphene identifies it as a `BookRoom` mutation.
-4. **Validation:** The Python resolver parses the Date Strings into actual Python `datetime` objects and runs the Time Conflict algorithm.
-5. **The Database (`database.py` & `models.py`):** If valid, SQLAlchemy translates the Python `BookingModel` object into an `INSERT INTO` SQL command and commits it to the SQLite `studyrooms.db` file.
-6. **The Response:** The newly created booking ID is sent back to the browser in JSON format.
+**Step-by-Step Flow Explanation:**
+1. **Client / Query:** The user opens the web browser and types a `mutation` payload asking to book "Room 1" from 10 AM to 12 PM.
+2. **GraphQL Server:** The Flask server (`app.py`) receives the HTTP POST request at the `/graphql` URL.
+3. **Schema:** Graphene steps in. It checks the payload against `schema.py` to ensure `studentId`, `roomId`, and `startTime` actually exist and are the correct data types (Integers/Strings).
+4. **Resolver:** This is the brain! The resolver (`mutate` inside `BookRoom`) executes Python code. It checks the database for time conflicts.
+5. **Database:** Since no conflicts are found, SQLAlchemy (`models.py`) converts the Python object into an `INSERT INTO` SQL command and saves it in the local `studyrooms.db` file.
+6. **Response:** Graphene formats the newly created database ID into a clean JSON object and shoots it right back to the browser.
 
 ---
 
-## 7. Common Viva Questions & Short Answers
+## 4. File Structure & Code Explanation
 
-**Q1: What is a GraphQL Resolver?**
-> A resolver is a function that acts as the data fetcher for a specific field in the schema. In our app, resolvers translate the GraphQL request into a SQLAlchemy database query.
+Here is exactly what every file in `study_room_booking/` does. 
 
-**Q2: What is an ORM and why did you use SQLAlchemy?**
-> ORM stands for Object-Relational Mapping. It allows developers to interact with a database using native object-oriented code (like Python Classes) instead of raw SQL strings. It helps prevent SQL injection vulnerabilities and makes the code cleaner.
+### `app.py` (The Entry Point)
+**Function:** It is the main file that starts the web server.
+* **Logic:** 
+  * It initializes `Flask`.
+  * It creates the single `/graphql` route endpoint using `GraphQLView`.
+  * It enables the GraphiQL interactive GUI so users can test queries visually in their browser without needing tools like Postman.
 
-**Q3: How would you scale this project for a massive real-world university?**
-> I would migrate the database from SQLite to PostgreSQL handling millions of concurrent transactions. I would also add User Authentication (like JWT tokens) so users actually have to log in to book rooms, avoiding fake requests.
+### `database.py` (The Connection Builder)
+**Function:** It serves as the bridge between Python and our SQLite database file.
+* **Logic:**
+  * Uses `create_engine` to connect to `studyrooms.db`.
+  * Configures `scoped_session` ensuring that every API request gets a clean, thread-safe connection to the database.
+
+### `models.py` (The Database Architecture)
+**Function:** Uses Object-Relational Mapping (ORM) via SQLAlchemy to define our SQL tables structure using Python classes rather than raw SQL strings.
+* **Logic / Tables:** 
+  * `Student`, `Room`, `Booking`, `Facility`, and `Review`.
+  * **Relational Logic:** Defines Foreign Keys (e.g., `booking.room_id`). It utilizes `relationship()` mapping so that querying a Booking automatically knows who the Student is and what the Room is.
+
+### `schema.py` (The Core Engine)
+**Function:** This is the most important file in the project. It explicitly tells GraphQL how to interpret Queries (Reading) and Mutations (Writing) and maps them to the database.
+* **Logic:**
+  * Maps our SQLAlchemy classes into GraphQL Node Types using `SQLAlchemyObjectType`.
+  * **Resolvers (`resolve_rooms`, `resolve_bookings`):** These are python functions that run `SELECT` queries on the database when the frontend asks for data.
+  * **Mutations (`BookRoom`):** Executes complex business logic. Before creating a Booking in the database, it queries SQLite to check if `existing_start_time < new_end_time` AND `existing_end_time > new_start_time`. If this evaluates to True, it blocks the booking to prevent a conflict. 
+
+### `seed_data.py`
+**Function:** A utility script to quickly populate our empty database with initial data so we don't have an empty app on startup. It automatically pushes fake Students, Rooms, and Facilities to SQLite.
+
+---
+
+## 5. Potential Viva Exam Questions & Answers
+
+**Q1: What exactly is an ORM (SQLAlchemy) and why did you use it instead of writing raw SQL code?**
+> "An ORM translates Python code (Classes) into SQL tables automatically. I used it because it keeps the codebase clean, makes database migrations much easier in the future, and acts as a massive security shield against SQL Injection vulnerabilities—a major problem if we used raw SQL queries."
+
+**Q2: Let’s say I write a GraphQL Query on the frontend for `rooms`. What happens on the backend?**
+> "When the query hits the server, Graphene routes it to the matching `Resolver` function inside `schema.py` (in this case, `resolve_rooms`). That python function runs an SQLAlchemy `.query().all()` operation over the Room database model, formats the resulting rows into JSON, and hands it straight back."
+
+**Q3: How exactly do you prevent Double-Booking? Walk me through the mathematical logic.**
+> "Inside the `BookRoom` mutation, before I execute the database `add()` command, I run a clash check query. It checks if the `roomId` matches, and if the existing booking's start time is physically *before* the new booking's end time, while its end time is physically *after* the new start time. If this query returns `> 0` results, it throws an Exception rejecting the request."
+
+**Q4: Why SQLite instead of PostgreSQL or MySQL?**
+> "SQLite is a brilliant choice for this specific scope because it is file-based and serverless. The entire database lives locally inside a single file (`studyrooms.db`). This means anyone testing the application doesn't have to install and configure a heavy background database server; the code just runs instantly anywhere."
+
+**Q5: What is the main difference between a Query and a Mutation in GraphQL?**
+> "A `Query` strictly acts as a `GET` request to fetch and read data without altering it. A `Mutation`, on the other hand, acts like `POST`, `PUT`, or `DELETE`, and is specifically designed to create or modify data in the database (like booking a room or adding a review). They use separate resolver methodologies."
